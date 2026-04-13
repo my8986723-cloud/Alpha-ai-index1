@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha AI | Cloud Index</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #00f2ff; --bg: #020617; --glass: rgba(15, 23, 42, 0.9); }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Outfit', sans-serif; background: var(--bg); color: #fff; overflow-x: hidden; }
+        .grid-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-image: linear-gradient(rgba(0, 242, 255, 0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 242, 255, 0.02) 1px, transparent 1px); background-size: 40px 40px; z-index: -1; }
+        header { padding: 60px 20px 20px; text-align: center; }
+        h1 { font-size: 2.5rem; background: linear-gradient(to bottom, #fff, var(--primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .container { max-width: 900px; margin: auto; padding: 20px; }
+        
+        /* Fixed Search Bar */
+        .controls { position: sticky; top: 20px; z-index: 1000; margin-bottom: 40px; }
+        #mainSearch { width: 100%; padding: 18px 25px; background: var(--glass); border: 1px solid var(--primary); border-radius: 50px; color: white; outline: none; backdrop-filter: blur(15px); box-shadow: 0 0 20px rgba(0, 242, 255, 0.1); }
+
+        /* Animation Fix */
+        .item { opacity: 0; margin-bottom: 30px; transition: all 0.6s ease-out; transform: translateY(30px); }
+        .item.active { opacity: 1; transform: translateY(0); }
+        
+        .card { background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 25px; padding: 25px; backdrop-filter: blur(10px); }
+        .tag { color: var(--primary); font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
+        h3 { margin: 10px 0; font-size: 1.5rem; }
+        p { color: #94a3b8; line-height: 1.6; margin-bottom: 20px; }
+
+        /* Visit Button Style */
+        .visit-btn { display: inline-block; padding: 10px 20px; background: var(--primary); color: #020617; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 0.9rem; transition: 0.3s; }
+        .visit-btn:hover { transform: scale(1.05); box-shadow: 0 0 15px var(--primary); }
+
+        .admin-form { display: none; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 20px; border: 1px solid var(--primary); margin-top: 20px; }
+        .admin-form input, .admin-form textarea { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 10px; border: none; background: #111; color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="grid-bg"></div>
+    <header><h1>Alpha AI Index</h1></header>
+
+    <div class="container">
+        <div class="controls">
+            <input type="text" id="mainSearch" placeholder="Search 50+ AI Tools...">
+        </div>
+
+        <div id="toolList"></div>
+
+        <div style="text-align: center; margin-top: 50px; padding-bottom: 50px;">
+            <button onclick="document.getElementById('adminPanel').style.display='block'" style="background:none; color:#444; border:none; cursor:pointer; font-size:12px;">Admin Access</button>
+            <div id="adminPanel" class="admin-form">
+                <input type="password" id="adminPass" placeholder="Password">
+                <input type="text" id="aiName" placeholder="AI Name">
+                <input type="text" id="aiCat" placeholder="Category">
+                <input type="text" id="aiUrl" placeholder="Website URL (https://...)">
+                <textarea id="aiDesc" placeholder="Description..."></textarea>
+                <button onclick="saveToFirebase()" style="width:100%; padding:12px; background:var(--primary); border:none; border-radius:10px; font-weight:bold; cursor:pointer; color:#020617;">Push to Cloud</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <script>
+        const firebaseConfig = { databaseURL: "https://alpha-8f7f5-default-rtdb.firebaseio.com/" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) entry.target.classList.add('active');
+            });
+        }, { threshold: 0.1 });
+
+        // LIVE DATA FETCH WITH SEARCH & BUTTON
+        db.ref('tools').on('value', (snapshot) => {
+            const data = snapshot.val();
+            const toolList = document.getElementById('toolList');
+            toolList.innerHTML = '';
+            
+            if(data) {
+                // Latest AI ko upar dikhane ke liye reverse kiya
+                const toolsArray = Object.values(data).reverse();
+                
+                toolsArray.forEach((tool) => {
+                    const item = document.createElement('div');
+                    item.className = 'item';
+                    item.innerHTML = `
+                        <div class="card">
+                            <span class="tag">${tool.cat || 'AI TOOL'}</span>
+                            <h3>${tool.name}</h3>
+                            <p>${tool.desc}</p>
+                            <a href="${tool.url || '#'}" target="_blank" class="visit-btn">Visit Website</a>
+                        </div>
+                    `;
+                    toolList.appendChild(item);
+                    observer.observe(item);
+                });
+            }
+        });
+
+        // SEARCH FUNCTIONALITY FIX
+        document.getElementById('mainSearch').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const cards = document.querySelectorAll('.item');
+            cards.forEach(card => {
+                const text = card.innerText.toLowerCase();
+                card.style.display = text.includes(term) ? 'block' : 'none';
+            });
+        });
+
+        function saveToFirebase() {
+            const pass = document.getElementById('adminPass').value;
+            const name = document.getElementById('aiName').value;
+            const cat = document.getElementById('aiCat').value;
+            const url = document.getElementById('aiUrl').value;
+            const desc = document.getElementById('aiDesc').value;
+
+            if(pass === 'mohit786' && name && desc) {
+                db.ref('tools').push({ name, cat, url, desc });
+                alert("Saved to Cloud!");
+                document.getElementById('adminPanel').style.display = 'none';
+            } else {
+                alert("Check Password or Fields!");
+            }
+        }
+    </script>
+</body>
+</html>
